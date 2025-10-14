@@ -7,9 +7,20 @@ updates:
     open-pull-requests-limit: 5
     allow:
       - dependency-type: "all"
+    automerged_updates:
+      - match:
+          update_type: "patch"
+          dependency_type: "all"
+        # merge_method can be merge, squash, or rebase
+        merge_method: "squash"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    automerged_updates:
+      - match:
+          update_type: "patch"
+          dependency_type: "all"
+        merge_method: "squash"
