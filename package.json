@@ -1,0 +1,19 @@
+{
+  "name": "empty-repo-20251014",
+  "version": "1.0.0",
+  "description": "Minimal CRM prototype (in-memory) with dashboards and API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "jest": "^29.6.1",
+    "supertest": "^6.3.3",
+    "nodemon": "^2.0.22"
+  }
+}
