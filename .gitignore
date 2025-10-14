@@ -1,0 +1,54 @@
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs_analysis.dat
+*.njsproj
+*.sln
+
+# Logs
+logs/
+*.log
+
+# OS/User files
+NTUSER.DAT
+ntuser.dat.LOG*
+
+# Media / large binaries
+*.webm
+*.mp4
+*.avi
+*.mov
+*.bmp
+*.exe
+*.dll
+
+# Misc
+.history
+.viminfo
+.cache
+.DS_Store
