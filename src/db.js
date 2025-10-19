@@ -92,8 +92,17 @@ try {
     if (/SELECT \* FROM targets WHERE ownerId=/i.test(s)) {
       return Object.values(memory.targets).filter(t => t.ownerId === params.ownerId).map(t => ({ ...t }));
     }
+    if (/SELECT \* FROM leads/i.test(s)) {
+      return Object.values(memory.leads).map(lead => ({ ...lead }));
+    }
     if (/SELECT \* FROM sales/i.test(s)) {
       return Object.values(memory.sales).map(s => ({ ...s }));
+    }
+    if (/SELECT \* FROM tasks/i.test(s)) {
+      return Object.values(memory.tasks).map(task => ({ ...task }));
+    }
+    if (/SELECT \* FROM targets/i.test(s)) {
+      return Object.values(memory.targets).map(target => ({ ...target }));
     }
     if (/SELECT COUNT\(\*\) as c FROM leads/i.test(s)) {
       return [{ c: Object.keys(memory.leads).length }];
