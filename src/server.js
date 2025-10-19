@@ -2,6 +2,7 @@ const http = require('http')
 const path = require('path')
 const fs = require('fs/promises')
 const { getDashboardData } = require('./data')
+const { authenticateCredentials, verifyToken } = require('./auth')
 
 const PORT = process.env.PORT || 3000
 const STATIC_ROOT = path.resolve(__dirname, '..', 'web', 'dist')
@@ -26,6 +27,31 @@ function sanitizePath(requestPath) {
     return '/index.html'
   }
   return normalized
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = ''
+    req.on('data', (chunk) => {
+      data += chunk.toString()
+      if (data.length > 1e6) {
+        req.destroy()
+        reject(new Error('Payload too large'))
+      }
+    })
+    req.on('end', () => resolve(data))
+    req.on('error', reject)
+  })
+}
+
+async function readJsonBody(req) {
+  const body = await readRequestBody(req)
+  if (!body) return null
+  try {
+    return JSON.parse(body)
+  } catch (error) {
+    throw new Error('Invalid JSON')
+  }
 }
 
 async function tryRead(filePath) {
@@ -92,9 +118,54 @@ function createServer() {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`)
 
+    if (url.pathname === '/api/login') {
+      if (req.method !== 'POST') {
+        res.statusCode = 405
+        res.setHeader('Allow', 'POST')
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.end(JSON.stringify({ error: 'Method Not Allowed' }))
+        return
+      }
+
+      try {
+        const body = await readJsonBody(req)
+        if (!body || typeof body.email !== 'string' || typeof body.password !== 'string') {
+          sendJson(res, 400, { error: 'Email and password are required' })
+          return
+        }
+
+        const auth = authenticateCredentials(body.email, body.password)
+        if (!auth) {
+          sendJson(res, 401, { error: 'Invalid credentials' })
+          return
+        }
+
+        sendJson(res, 200, auth)
+      } catch (error) {
+        if (error.message === 'Invalid JSON') {
+          sendJson(res, 400, { error: 'Invalid JSON payload' })
+        } else if (error.message === 'Payload too large') {
+          sendJson(res, 413, { error: 'Payload too large' })
+        } else {
+          console.error('Failed to process login request', error)
+          sendJson(res, 500, { error: 'Internal Server Error' })
+        }
+      }
+      return
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/metrics') {
+      const authHeader = req.headers.authorization || ''
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+      const user = token ? verifyToken(token) : null
+
+      if (!user) {
+        sendJson(res, 401, { error: 'Unauthorized' })
+        return
+      }
+
       const payload = getDashboardData()
-      sendJson(res, 200, payload)
+      sendJson(res, 200, { user, dashboard: payload })
       return
     }
 
