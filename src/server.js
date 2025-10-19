@@ -1,9 +1,12 @@
 const http = require('http')
-const fs = require('fs')
 const path = require('path')
+const fsPromises = require('fs/promises')
 const db = require('./db')
 
 const PORT = process.env.PORT || 3000
+const STATIC_ROOT = path.resolve(__dirname, '..', 'web', 'dist')
+const DEV_INDEX = path.resolve(__dirname, '..', 'web', 'index.html')
+const staticCache = new Map()
 
 function parsePayload(payload) {
   if (!payload) return {}
@@ -459,52 +462,124 @@ function getContentType(filePath) {
   }
 }
 
+function isPathWithin(parent, candidate) {
+  const relative = path.relative(parent, candidate)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+function resolveStaticAsset(rootDir, requestPath) {
+  const trimmed = requestPath.replace(/^\/+/, '')
+  const resolved = path.resolve(rootDir, trimmed)
+  if (!isPathWithin(rootDir, resolved)) {
+    return null
+  }
+  return resolved
+}
+
+async function loadStaticAsset(filePath) {
+  const useCache = process.env.NODE_ENV === 'production'
+  if (useCache && staticCache.has(filePath)) {
+    return staticCache.get(filePath)
+  }
+
+  const buffer = await fsPromises.readFile(filePath)
+  const asset = { buffer, contentType: getContentType(filePath) }
+  if (useCache) {
+    staticCache.set(filePath, asset)
+  }
+  return asset
+}
+
+async function tryServeStatic(pathname, method, res) {
+  const candidates = []
+
+  if (pathname === '/' || pathname === '') {
+    candidates.push(path.join(STATIC_ROOT, 'index.html'))
+    candidates.push(DEV_INDEX)
+  } else {
+    const target = resolveStaticAsset(STATIC_ROOT, pathname)
+    if (target) {
+      candidates.push(target)
+    }
+
+    const hasExtension = path.extname(pathname) !== ''
+    if (!hasExtension) {
+      candidates.push(path.join(STATIC_ROOT, 'index.html'))
+      candidates.push(DEV_INDEX)
+    }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const asset = await loadStaticAsset(candidate)
+      res.writeHead(200, { 'Content-Type': asset.contentType })
+      if (method !== 'HEAD') {
+        res.end(asset.buffer)
+      } else {
+        res.end()
+      }
+      return true
+    } catch (err) {
+      if (err && err.code === 'ENOENT') {
+        continue
+      }
+
+      console.error('Error serving static asset', candidate, err)
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Internal Server Error')
+      return true
+    }
+  }
+
+  return false
+}
+
 function createRequestListener() {
-  return (req, res) => {
-    const url = new URL(req.url, 'http://localhost')
-    const pathname = url.pathname
+  return async (req, res) => {
+    try {
+      const url = new URL(req.url, 'http://localhost')
+      const pathname = url.pathname
 
-    if (req.method === 'GET' && pathname === '/api/dashboard/ceo') {
-      const payload = buildDashboardPayload()
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify(payload))
-      return
-    }
+      if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/api/dashboard/ceo') {
+        const payload = buildDashboardPayload()
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+        }
+        res.writeHead(200, headers)
+        if (req.method === 'HEAD') {
+          res.end()
+        } else {
+          res.end(JSON.stringify(payload))
+        }
+        return
+      }
 
-    if (pathname.startsWith('/api/')) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ error: 'Not found' }))
-      return
-    }
+      if (pathname.startsWith('/api/')) {
+        res.writeHead(404, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+        })
+        res.end(JSON.stringify({ error: 'Not found' }))
+        return
+      }
 
-    if (process.env.NODE_ENV !== 'test') {
-      const webDir = path.join(__dirname, '..', 'web', 'dist')
-      const requestedFile = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '')
-      const filePath = path.join(webDir, requestedFile)
-
-      fs.readFile(filePath, (err, buffer) => {
-        if (!err) {
-          res.writeHead(200, { 'Content-Type': getContentType(filePath) })
-          res.end(buffer)
+      if (process.env.NODE_ENV !== 'test' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const served = await tryServeStatic(pathname, req.method, res)
+        if (served) {
           return
         }
+      }
 
-        const fallbackPath = path.join(webDir, 'index.html')
-        fs.readFile(fallbackPath, (fallbackErr, fallbackBuffer) => {
-          if (fallbackErr) {
-            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-            res.end('Not found')
-          } else {
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-            res.end(fallbackBuffer)
-          }
-        })
-      })
-      return
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Not found')
+    } catch (err) {
+      console.error('Unhandled server error', err)
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+      }
+      res.end('Internal Server Error')
     }
-
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-    res.end('Not found')
   }
 }
 
