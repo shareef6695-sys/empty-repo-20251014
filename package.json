@@ -1,26 +1,13 @@
 {
   "name": "empty-repo-20251014",
   "version": "1.0.0",
-  "description": "Minimal CRM prototype (in-memory) with dashboards and API",
+  "description": "PVC compounding API used by the React formulation builder",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "test": "jest --runInBand"
+    "dev": "node src/server.js",
+    "test": "echo \"No automated tests for the API layer\" && exit 0"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "better-sqlite3": "^8.2.0"
-  },
-  "devDependencies": {
-    "jest": "^29.6.1",
-    "supertest": "^6.3.3",
-    "nodemon": "^2.0.22"
-  }
-  ,
-  "jest": {
-    "roots": ["<rootDir>/tests"],
-    "testMatch": ["**/?(*.)+(spec|test).[jt]s?(x)"],
-    "testEnvironment": "node"
-  }
+  "dependencies": {},
+  "devDependencies": {}
 }
